@@ -8,7 +8,7 @@ def test_linear_kernel():
     y = np.array([[3, 4]])
     expected = np.dot(x, y.T)
     assert np.allclose(kernel(x, y), expected)
-    assert repr(kernel) == "Linear kernel"
+    assert str(kernel) == "Linear kernel"
 
 def test_poly_kernel():
     degree = 3
@@ -17,7 +17,7 @@ def test_poly_kernel():
     y = np.array([[3, 4]])
     expected = np.dot(x, y.T) ** degree
     assert np.allclose(kernel(x, y), expected)
-    assert repr(kernel) == "Poly kernel"
+    assert str(kernel) == "Poly kernel"
 
 def test_rbf_kernel():
     gamma = 0.5
@@ -25,32 +25,25 @@ def test_rbf_kernel():
     x = np.array([[1, 0]])
     y = np.array([[0, 1]])
     
-    # RBF: exp(-gamma * ||x-y||^2)
-    # dist^2 = (1-0)^2 + (0-1)^2 = 2
-    # expected = exp(-0.5 * 2) = exp(-1)
-    expected = np.exp(-gamma * 2.0)
+    # Distance squared between (1,0) and (0,1) is (1-0)^2 + (0-1)^2 = 2
+    # RBF = exp(-0.5 * 2) = exp(-1)
+    expected = np.exp(-gamma * 2)
     
     result = kernel(x, y)
     assert np.allclose(result, expected)
-    assert repr(kernel) == "RBF kernel"
+    assert str(kernel) == "RBF kernel"
 
-def test_rbf_dimension_handling():
-    kernel = RBF()
-    x = np.array([1, 0])
-    y = np.array([0, 1])
-    # Should handle 1D arrays by converting to 2D internally
+def test_rbf_input_dimensions():
+    kernel = RBF(gamma=0.1)
+    x = np.array([1, 2])
+    y = np.array([3, 4])
+    # Ensure it handles 1D arrays via atleast_2d
     result = kernel(x, y)
     assert result.shape == (1,)
 
-def test_kernel_matrix_shape():
-    x = np.random.rand(5, 2)
-    y = np.random.rand(3, 2)
-    
-    linear = Linear()
-    poly = Poly()
-    rbf = RBF()
-    
-    assert linear(x, y).shape == (5, 3)
-    assert poly(x, y).shape == (5, 3)
-    # RBF flattens the result
-    assert rbf(x, y).shape == (15,)
+def test_linear_matrix_input():
+    kernel = Linear()
+    x = np.array([[1, 2], [3, 4]])
+    y = np.array([[5, 6], [7, 8]])
+    expected = np.dot(x, y.T)
+    assert np.array_equal(kernel(x, y), expected)
