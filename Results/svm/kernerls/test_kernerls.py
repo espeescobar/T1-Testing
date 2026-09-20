@@ -1,56 +1,68 @@
-import pytest
 import numpy as np
+import pytest
+from unittest.mock import MagicMock
 from Public_Proyects.svm.kernerls import Linear, Poly, RBF
 
 def test_linear_kernel():
-    kernel = Linear()
-    x = np.array([[1, 2]])
-    y = np.array([[3, 4]])
+    linear = Linear()
+    x = np.array([[1, 2], [3, 4]])
+    y = np.array([[5, 6], [7, 8]])
+    
     expected = np.dot(x, y.T)
-    assert np.allclose(kernel(x, y), expected)
-    assert repr(kernel) == "Linear kernel"
+    result = linear(x, y)
+    
+    assert np.array_equal(result, expected)
+    assert str(linear) == "Linear kernel"
 
 def test_poly_kernel():
     degree = 3
-    kernel = Poly(degree=degree)
+    poly = Poly(degree=degree)
     x = np.array([[1, 2]])
     y = np.array([[3, 4]])
+    
     expected = np.dot(x, y.T) ** degree
-    assert np.allclose(kernel(x, y), expected)
-    assert repr(kernel) == "Poly kernel"
+    result = poly(x, y)
+    
+    assert np.array_equal(result, expected)
+    assert poly.degree == degree
+    assert str(poly) == "Poly kernel"
 
-def test_rbf_kernel():
+def test_rbf_kernel_basic():
     gamma = 0.5
-    kernel = RBF(gamma=gamma)
-    x = np.array([[1, 0]])
-    y = np.array([[0, 1]])
+    rbf = RBF(gamma=gamma)
+    x = np.array([[1, 2]])
+    y = np.array([[1, 2]])
     
-    # RBF: exp(-gamma * ||x-y||^2)
-    # dist^2 = (1-0)^2 + (0-1)^2 = 2
-    # expected = exp(-0.5 * 2) = exp(-1)
-    expected = np.exp(-gamma * 2.0)
+    result = rbf(x, y)
     
-    result = kernel(x, y)
-    assert np.allclose(result, expected)
-    assert repr(kernel) == "RBF kernel"
+    # Distance is 0, exp(-0) = 1
+    assert np.isclose(result[0], 1.0)
+    assert rbf.gamma == gamma
+    assert str(rbf) == "RBF kernel"
 
-def test_rbf_dimension_handling():
-    kernel = RBF()
-    x = np.array([1, 0])
-    y = np.array([0, 1])
-    # Should handle 1D arrays by converting to 2D internally
-    result = kernel(x, y)
-    assert result.shape == (1,)
+def test_rbf_kernel_dimensions():
+    rbf = RBF(gamma=0.1)
+    x = np.array([1, 2]) # 1D array should be handled by atleast_2d
+    y = np.array([3, 4])
+    
+    result = rbf(x, y)
+    assert isinstance(result, np.ndarray)
+    assert result.ndim == 1
 
-def test_kernel_matrix_shape():
-    x = np.random.rand(5, 2)
-    y = np.random.rand(3, 2)
+def test_rbf_with_mock():
+    # Example usage of MagicMock as requested
+    mock_dist = MagicMock()
+    # Simulating dist.cdist behavior
+    mock_dist.return_value = np.array([[2.0]])
     
-    linear = Linear()
-    poly = Poly()
-    rbf = RBF()
+    import Public_Proyects.svm.kernerls as kernels
+    kernels.dist.cdist = mock_dist
     
-    assert linear(x, y).shape == (5, 3)
-    assert poly(x, y).shape == (5, 3)
-    # RBF flattens the result
-    assert rbf(x, y).shape == (15,)
+    rbf = RBF(gamma=0.1)
+    x = np.array([[1, 2]])
+    y = np.array([[3, 4]])
+    
+    rbf(x, y)
+    
+    mock_dist.assert_called_once()
+    assert mock_dist.call_args[0][0].shape == (1, 2)

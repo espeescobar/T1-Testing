@@ -1,0 +1,9 @@
+
+[cosmic-ray]
+module-path = "Public_Proyects/stock4/validate.py"
+timeout = 10.0
+test-command = "python -m pytest Results/stock4/validate/test_validate.py"
+
+[cosmic-ray.distributor]
+name = "local"
+    

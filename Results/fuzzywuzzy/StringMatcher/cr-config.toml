@@ -1,0 +1,9 @@
+
+[cosmic-ray]
+module-path = "Public_Proyects/fuzzywuzzy/StringMatcher.py"
+timeout = 10.0
+test-command = "python -m pytest Results/fuzzywuzzy/StringMatcher/test_StringMatcher.py"
+
+[cosmic-ray.distributor]
+name = "local"
+    

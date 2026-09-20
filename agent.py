@@ -10,11 +10,19 @@ import json
 
 load_dotenv()
 
-def ejecutar_pytest(ruta_test):
+
+def construir_pythonpath_extra(ruta_archivo):
+    carpeta_proyecto = os.path.dirname(os.path.abspath(ruta_archivo))  
+    carpeta_padre = os.path.dirname(carpeta_proyecto)                   
+    rutas = [os.getcwd(), carpeta_padre, carpeta_proyecto]
+    return os.pathsep.join(rutas)
+
+
+def ejecutar_pytest(ruta_test, ruta_archivo):
     comando = ["python", "-m", "pytest", ruta_test]
     try:
         env_actual = os.environ.copy()
-        env_actual["PYTHONPATH"] = os.getcwd()
+        env_actual["PYTHONPATH"] = construir_pythonpath_extra(ruta_archivo)
         resultado = subprocess.run(
             comando,
             capture_output=True, 
@@ -49,7 +57,7 @@ def extraer_codigo_python(texto):
 
 def ejecutar_coverage(ruta_test, ruta_codigo_fuente):
     env_actual = os.environ.copy()
-    env_actual["PYTHONPATH"] = os.getcwd()
+    env_actual["PYTHONPATH"] = construir_pythonpath_extra(ruta_codigo_fuente)
     ruta_abs_fuente = os.path.abspath(ruta_codigo_fuente)
     cmd_run = ["coverage", "run", "--branch", "-m", "pytest", ruta_test]
     subprocess.run(cmd_run, capture_output=True, env=env_actual)
@@ -68,6 +76,52 @@ def ejecutar_coverage(ruta_test, ruta_codigo_fuente):
         
     except (FileNotFoundError, KeyError):
         return 0.0, 0.0
+
+
+def ejecutar_mutacion(ruta_codigo_fuente, ruta_test, output_folder):
+    config_path = os.path.join(output_folder, "cr-config.toml")
+    session_path = os.path.join(output_folder, "cr-session.sqlite")
+    if os.path.exists(session_path):
+        os.remove(session_path)
+    contenido_toml = f"""
+[cosmic-ray]
+module-path = "{ruta_codigo_fuente}"
+timeout = 10.0
+test-command = "python -m pytest {ruta_test}"
+
+[cosmic-ray.distributor]
+name = "local"
+    """
+    with open(config_path, "w", encoding="utf-8") as f:
+        f.write(contenido_toml)
+
+    env_actual = os.environ.copy()
+    env_actual["PYTHONPATH"] = construir_pythonpath_extra(ruta_codigo_fuente)
+
+    try:
+        subprocess.run(
+            ["cosmic-ray", "init", config_path, session_path],
+            env=env_actual, capture_output=True, check=True
+        )
+        subprocess.run(
+            ["cosmic-ray", "exec", config_path, session_path],
+            env=env_actual, capture_output=True, check=True
+        )
+        resultado_rate = subprocess.run(
+            ["cr-rate", session_path],
+            env=env_actual, capture_output=True, text=True, check=True
+        )
+        tasa_supervivencia = float(resultado_rate.stdout.strip())
+        mutation_score = 1.0 - (tasa_supervivencia / 100.0)
+        return mutation_score
+
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
+        print(f"Error ejecutando Cosmic Ray ({e.cmd}): {stderr}")
+        return 0.0
+    except Exception as e:
+        print(f"Error aislando mutantes con Cosmic Ray: {e}")
+        return 0.0
 
 
 def main(ruta_archivo, output_folder):
@@ -130,9 +184,6 @@ def main(ruta_archivo, output_folder):
         print(f"\n--- Iteración {intentos} --- (Tiempo restante: {tiempo_restante:.1f}s)")
 
         try:
-            if intentos != 1:
-                prompt = "Los tests anteriores fallaron con X error. Corrige el código y genera una nueva versión que pase todas las aserciones."
-         
             response = chat.send_message(prompt)
             codigo_generado_crudo = response.text
             print(f"Generado intento {intentos}...")
@@ -157,14 +208,41 @@ def main(ruta_archivo, output_folder):
         with open(ruta_archivo_temporal, "w", encoding="utf-8") as archivo:
             archivo.write(codigo_limpio)
         print(f"Ejecutando pruebas en {ruta_archivo_temporal}...")
-        exito, stdout, stderr = ejecutar_pytest(ruta_archivo_temporal)
-
-        if exito:
+        exito, stdout, stderr = ejecutar_pytest(ruta_archivo_temporal, ruta_archivo)
+        tiempo_restante = time_budget - (time.time() - start_time)
+        if tiempo_restante < 10:
+            break
+        elif exito:
             line_cov, branch_cov = ejecutar_coverage(ruta_archivo_temporal, ruta_archivo)
-            print(f"Métricas actuales -> Line Coverage: {line_cov:.2f}, Branch Coverage: {branch_cov:.2f}")
-            if line_cov >= 0.80 and branch_cov >= 0.50:
-                print("¡Cobertura suficiente alcanzada!")
-                test_valido = True
+            tiempo_restante = time_budget - (time.time() - start_time)
+            if tiempo_restante < 10:
+                break
+            elif line_cov >= 0.80 and branch_cov >= 0.50:
+                print("¡Cobertura suficiente!")
+                mutation_score = ejecutar_mutacion(ruta_archivo, ruta_archivo_temporal, output_folder)
+                tiempo_restante = time_budget - (time.time() - start_time)
+                if tiempo_restante < 10:
+                    break
+                elif mutation_score>= 0.50:
+                    print("¡Mutation Score suficiente!")
+                    test_valido = True
+                else:
+                    print("Mutation Score bajo. Solicitando  al LLM...")
+                prompt = f"""
+                Tus pruebas pasaron con usficiente cobertura, pero el mutation score es insuficiente.
+                - Mutation Score actual: {mutation_score*100}% (Mínimo requerido: 50%).
+                
+                CÓDIGO FUENTE ORIGINAL:
+                ```python
+                {codigo_fuente}
+                ```
+                
+                PRUEBAS ACTUALES:
+                ```python
+                {codigo_limpio}
+                ``` 
+                """
+
             else:
                 print("La cobertura es baja. Solicitando más tests al LLM...")
                 prompt = f"""
@@ -200,19 +278,20 @@ def main(ruta_archivo, output_folder):
                 
                 Por favor, analiza el error, corrige el código y genera una nueva versión.
                 """
-         
-   
-    print(f"\nGeneración finalizada en {time.time() - start_time:.1f} segundos.")
-    print(f"Exportando resultados finales en {output_folder}")
+
     print(f"\nGeneración finalizada en {time.time() - start_time:.1f} segundos.")
     
     line_cov_final, branch_cov_final = ejecutar_coverage(ruta_archivo_temporal, ruta_archivo)
     metricas = {
         "line_coverage": round(line_cov_final, 2),
         "branch_coverage": round(branch_cov_final, 2),
-        "mutation_score": 0.0  
+        "mutation_score": round(mutation_score, 2)
     }
-    
+    print("\n================ RESULTADOS FINALES ================")
+    print(f"Line Coverage:   {metricas['line_coverage'] * 100:.1f}%")
+    print(f"Branch Coverage: {metricas['branch_coverage'] * 100:.1f}%")
+    print(f"Mutation Score:  {metricas['mutation_score'] * 100:.1f}%")
+    print("====================================================\n")
     ruta_metricas = os.path.join(output_folder, "metrics.json")
     with open(ruta_metricas, "w") as f:
         json.dump(metricas, f, indent=4)

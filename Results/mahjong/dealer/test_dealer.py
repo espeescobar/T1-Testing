@@ -1,42 +1,73 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from dealer import MahjongDealer
+from Public_Proyects.mahjong.dealer import MahjongDealer
 
-class MockPlayer:
-    def __init__(self):
-        self.hand = []
+class TestMahjongDealer:
 
-@pytest.fixture
-def mock_random():
-    rng = MagicMock()
-    # Definimos que shuffle no haga nada para evitar errores durante la inicialización
-    rng.shuffle.side_effect = lambda x: x
-    return rng
+    @pytest.fixture
+    def mock_np_random(self):
+        return MagicMock()
 
-@pytest.fixture
-def dealer(mock_random):
-    # Usamos patch para evitar errores si init_deck depende de imports externos
-    with patch('dealer.init_deck', return_value=[f"card_{i}" for i in range(144)]):
-        return MahjongDealer(mock_random)
+    @pytest.fixture
+    def dealer(self, mock_np_random):
+        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
+            # Creamos una lista de mocks numerados para identificar las cartas
+            mock_cards = [MagicMock(name=f"card_{i}") for i in range(10)]
+            mock_init.return_value = list(mock_cards)
+            return MahjongDealer(mock_np_random)
 
-def test_mahjong_dealer_initialization(dealer, mock_random):
-    assert len(dealer.deck) == 144
-    assert mock_random.shuffle.called
-    assert dealer.table == []
+    def test_init(self, mock_np_random):
+        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
+            mock_deck = [MagicMock()]
+            mock_init.return_value = mock_deck
+            
+            dealer = MahjongDealer(mock_np_random)
+            
+            assert dealer.np_random == mock_np_random
+            assert dealer.deck == mock_deck
+            assert dealer.table == []
+            mock_np_random.shuffle.assert_called_once_with(mock_deck)
 
-def test_shuffle(dealer, mock_random):
-    dealer.shuffle()
-    # Verifica que shuffle fue llamado al menos dos veces (una en init, otra aquí)
-    assert mock_random.shuffle.call_count >= 2
+    def test_shuffle(self, dealer, mock_np_random):
+        dealer.shuffle()
+        mock_np_random.shuffle.assert_called_with(dealer.deck)
 
-def test_deal_cards(dealer):
-    player = MockPlayer()
-    num_cards = 5
-    
-    initial_deck_size = len(dealer.deck)
-    dealer.deal_cards(player, num_cards)
-    
-    assert len(player.hand) == num_cards
-    assert len(dealer.deck) == initial_deck_size - num_cards
-    # Verificamos que las cartas repartidas sean las del final del deck (stack)
-    assert player.hand[0] == f"card_{initial_deck_size - 1}"
+    def test_deal_cards(self, dealer):
+        # Configuración del jugador mock con lista real para 'hand'
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        # Guardamos referencias a las cartas antes de repartir
+        # Como el método usa pop(), las cartas repartidas son las que estaban al final
+        initial_deck = list(dealer.deck)
+        num_cards_to_deal = 3
+        expected_cards = initial_deck[-num_cards_to_deal:]
+        
+        dealer.deal_cards(mock_player, num_cards_to_deal)
+        
+        # Verificamos longitud
+        assert len(mock_player.hand) == num_cards_to_deal
+        assert len(dealer.deck) == len(initial_deck) - num_cards_to_deal
+        
+        # Verificamos que las cartas en la mano sean las que se retiraron del final del deck
+        # El orden en hand será [última, penúltima, antepenúltima] debido al pop()
+        assert mock_player.hand == expected_cards[::-1]
+        
+    def test_deal_cards_empty_deck_behavior(self, dealer):
+        # Vaciamos el deck
+        dealer.deck = []
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        # Intentar repartir de un deck vacío debe lanzar IndexError por el pop()
+        with pytest.raises(IndexError):
+            dealer.deal_cards(mock_player, 1)
+
+    def test_integration_with_multiple_cards(self, dealer):
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        # Repartir 5 cartas
+        dealer.deal_cards(mock_player, 5)
+        
+        assert len(mock_player.hand) == 5

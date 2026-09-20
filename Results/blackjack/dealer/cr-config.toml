@@ -1,0 +1,9 @@
+
+[cosmic-ray]
+module-path = "Public_Proyects/blackjack/dealer.py"
+timeout = 10.0
+test-command = "python -m pytest Results/blackjack/dealer/test_dealer.py"
+
+[cosmic-ray.distributor]
+name = "local"
+    
