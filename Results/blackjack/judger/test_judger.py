@@ -5,80 +5,90 @@ from Public_Proyects.blackjack.judger import BlackjackJudger
 class TestBlackjackJudger:
     @pytest.fixture
     def judger(self):
-        mock_np_random = MagicMock()
-        return BlackjackJudger(mock_np_random)
+        return BlackjackJudger(MagicMock())
 
-    def test_judge_score_basic(self, judger):
-        card1 = MagicMock(rank="2")
-        card2 = MagicMock(rank="3")
-        assert judger.judge_score([card1, card2]) == 5
-
-    def test_judge_score_ace_adjustment(self, judger):
-        card1 = MagicMock(rank="A")
-        card2 = MagicMock(rank="K")
-        card3 = MagicMock(rank="2")
-        # 11 + 10 + 2 = 23 -> 13
-        assert judger.judge_score([card1, card2, card3]) == 13
-
-    def test_judge_score_multiple_aces(self, judger):
-        cards = [MagicMock(rank="A"), MagicMock(rank="A"), MagicMock(rank="9")]
-        # 11 + 11 + 9 = 31 -> 21 -> 11
-        assert judger.judge_score(cards) == 11
-
-    def test_judge_round_alive(self, judger):
-        player = MagicMock()
-        player.hand = [MagicMock(rank="T")]
-        status, score = judger.judge_round(player)
+    def test_judge_round_branches(self, judger):
+        # Rama if (score <= 21)
+        player_alive = MagicMock()
+        player_alive.hand = [MagicMock(rank="T")]
+        status, score = judger.judge_round(player_alive)
         assert status == "alive"
         assert score == 10
 
-    def test_judge_round_bust(self, judger):
-        player = MagicMock()
-        player.hand = [MagicMock(rank="K"), MagicMock(rank="K"), MagicMock(rank="2")]
-        status, score = judger.judge_round(player)
+        # Rama else (score > 21)
+        player_bust = MagicMock()
+        player_bust.hand = [MagicMock(rank="T"), MagicMock(rank="T"), MagicMock(rank="2")]
+        status, score = judger.judge_round(player_bust)
         assert status == "bust"
         assert score == 22
 
-    def test_judge_game_player_bust(self, judger):
+    def test_judge_game_branches(self, judger):
+        # 1. Rama if: player bust
         game = MagicMock()
-        game_pointer = 0
         game.players = {0: MagicMock(status='bust')}
         game.winner = {}
-        judger.judge_game(game, game_pointer)
+        judger.judge_game(game, 0)
         assert game.winner['player0'] == -1
 
-    def test_judge_game_dealer_bust_player_alive(self, judger):
-        game = MagicMock()
-        game_pointer = 0
+        # 2. Rama elif: dealer bust (player not bust)
         game.players = {0: MagicMock(status='alive')}
         game.dealer = MagicMock(status='bust')
         game.winner = {}
-        judger.judge_game(game, game_pointer)
+        judger.judge_game(game, 0)
         assert game.winner['player0'] == 2
 
-    def test_judge_game_win_by_score(self, judger):
-        game = MagicMock()
-        game_pointer = 0
+        # 3. Rama else: both not bust
+        # 3a. Sub-rama: player > dealer
         game.players = {0: MagicMock(status='alive', score=20)}
-        game.dealer = MagicMock(status='alive', score=18)
+        game.dealer = MagicMock(status='alive', score=10)
         game.winner = {}
-        judger.judge_game(game, game_pointer)
+        judger.judge_game(game, 0)
         assert game.winner['player0'] == 2
 
-    def test_judge_game_lose_by_score(self, judger):
-        game = MagicMock()
-        game_pointer = 0
-        game.players = {0: MagicMock(status='alive', score=17)}
-        game.dealer = MagicMock(status='alive', score=19)
+        # 3b. Sub-rama: player < dealer
+        game.players = {0: MagicMock(status='alive', score=10)}
+        game.dealer = MagicMock(status='alive', score=20)
         game.winner = {}
-        judger.judge_game(game, game_pointer)
+        judger.judge_game(game, 0)
         assert game.winner['player0'] == -1
 
-    def test_judge_game_tie(self, judger):
-        game = MagicMock()
-        game_pointer = 0
-        game.players = {0: MagicMock(status='alive', score=19)}
-        game.dealer = MagicMock(status='alive', score=19)
+        # 3c. Sub-rama: else (tie)
+        game.players = {0: MagicMock(status='alive', score=15)}
+        game.dealer = MagicMock(status='alive', score=15)
         game.winner = {}
-        judger.judge_game(game, game_pointer)
+        judger.judge_game(game, 0)
         assert game.winner['player0'] == 1
+
+    def test_judge_score_branches(self, judger):
+        # Bucle for vacio
+        assert judger.judge_score([]) == 0
+        
+        # Bucle for, caso normal sin Ases
+        assert judger.judge_score([MagicMock(rank="2"), MagicMock(rank="3")]) == 5
+        
+        # As con valor inicial 11
+        assert judger.judge_score([MagicMock(rank="A")]) == 11
+        
+        # Bucle while: condición score > 21
+        # [A, A] -> 11 + 11 = 22. Entra al while -> 12
+        assert judger.judge_score([MagicMock(rank="A"), MagicMock(rank="A")]) == 12
+        
+        # Bucle while: condición count_a > 0
+        # [A, A, A, A] -> 44 -> 34 -> 24 -> 14
+        assert judger.judge_score([MagicMock(rank="A"), MagicMock(rank="A"), MagicMock(rank="A"), MagicMock(rank="A")]) == 14
+        
+        # Caso borde: Reducción exacta a 21
+        # [A, A, 9] -> 11 + 11 + 9 = 31 -> 21
+        assert judger.judge_score([MagicMock(rank="A"), MagicMock(rank="A"), MagicMock(rank="9")]) == 21
+
+    def test_init_and_errors(self, judger):
+        mock_rand = MagicMock()
+        j = BlackjackJudger(mock_rand)
+        assert j.np_random == mock_rand
+        
+        # Validación de estructura de datos
+        assert j.rank2score['A'] == 11
+        
+        # Error en input (KeyError al acceder a ranking inexistente)
+        with pytest.raises(KeyError):
+            j.judge_score([MagicMock(rank="Z")])

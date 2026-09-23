@@ -3,63 +3,69 @@ from unittest.mock import MagicMock
 from Public_Proyects.blackjack.base import Card
 
 def test_card_initialization():
-    card = Card('H', 'A')
-    assert card.suit == 'H'
+    card = Card('S', 'A')
+    assert card.suit == 'S'
     assert card.rank == 'A'
 
-def test_card_equality():
-    card1 = Card('S', 'K')
-    card2 = Card('S', 'K')
-    card3 = Card('H', 'A')
+def test_card_equality_logic():
+    card = Card('S', 'A')
     
-    assert card1 == card2
-    assert card1 != card3
-    assert card1 != "SK"
-    # La comparación (card1 == 123) retorna el objeto NotImplemented, 
-    # pero en Python, al evaluar "if (card1 == 123) is NotImplemented" el resultado 
-    # depende de cómo el operador == maneja el resultado de NotImplemented.
-    # Se corrige para verificar explícitamente el valor retornado por el método __eq__
-    assert card1.__eq__(123) is NotImplemented
+    # Coverage: Branch 'if isinstance(other, Card)'
+    assert card == Card('S', 'A')
+    assert card != Card('H', 'A')
+    assert card != Card('S', 'K')
+    
+    # Coverage: Branch 'else' in __eq__
+    assert (card == "AS") is False
+    assert card.__eq__(123) is NotImplemented
 
-def test_card_hash():
-    card1 = Card('S', 'A')
-    card2 = Card('S', 'A')
-    card3 = Card('H', '2')
+def test_card_hash_and_exceptions():
+    # Coverage: Valid hash calculation
+    card = Card('S', 'A')
+    assert isinstance(hash(card), int)
     
-    assert hash(card1) == hash(card2)
-    assert hash(card1) != hash(card3)
+    # Coverage: ValueError in .index() calls inside __hash__
+    invalid_suit = Card('Z', 'A')
+    with pytest.raises(ValueError):
+        hash(invalid_suit)
+        
+    invalid_rank = Card('S', '1')
+    with pytest.raises(ValueError):
+        hash(invalid_rank)
 
 def test_card_str():
-    card = Card('D', 'T')
-    assert str(card) == 'TD'
+    card = Card('C', 'T')
+    assert str(card) == 'TC'
 
 def test_card_get_index():
-    card = Card('C', 'J')
-    assert card.get_index() == 'CJ'
+    card = Card('D', '5')
+    assert card.get_index() == 'D5'
 
-def test_card_with_mock():
-    # Utilizando MagicMock para simular objetos Card manteniendo la integridad de la clase
-    mock_card = MagicMock(spec=Card)
-    mock_card.suit = 'BJ'
-    mock_card.rank = 'A'
+def test_card_equality_with_mock():
+    # Coverage: Mocking with spec=Card allows passing isinstance(other, Card) check
+    card = Card('S', 'A')
     
-    assert mock_card.suit == 'BJ'
-    assert mock_card.rank == 'A'
-
-@pytest.mark.parametrize("suit, rank", [
-    ('S', 'A'), ('H', '2'), ('D', '3'), ('C', '4'), ('BJ', '5'), ('RJ', 'T')
-])
-def test_valid_card_creation(suit, rank):
-    card = Card(suit, rank)
-    assert card.suit == suit
-    assert card.rank == rank
-
-def test_hash_calculation_logic():
-    # Verificación de la fórmula: rank_index + 100 * suit_index
-    # S(0), A(0) -> 0 + 0 = 0
-    # H(1), 2(1) -> 1 + 100 = 101
-    card1 = Card('S', 'A')
-    card2 = Card('H', '2')
+    mock_match = MagicMock(spec=Card)
+    mock_match.suit = 'S'
+    mock_match.rank = 'A'
     
-    assert hash(card1) == 0
-    assert hash(card2) == 101
+    mock_mismatch = MagicMock(spec=Card)
+    mock_mismatch.suit = 'H'
+    mock_mismatch.rank = 'A'
+    
+    assert card == mock_match
+    assert card != mock_mismatch
+
+def test_full_matrix_of_types():
+    # Ensuring every single valid path in index/hash logic is touched
+    for suit in Card.valid_suit:
+        for rank in Card.valid_rank:
+            card = Card(suit, rank)
+            assert card.get_index() == suit + rank
+            assert str(card) == rank + suit
+            assert isinstance(hash(card), int)
+
+def test_comparison_with_none_type():
+    card = Card('S', 'A')
+    # Explicitly testing None branch in equality
+    assert card.__eq__(None) is NotImplemented

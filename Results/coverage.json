@@ -1,0 +1,22 @@
+{
+    "resumen": {
+        "line_coverage": "100.0%",
+        "branch_coverage": "100.0%",
+        "lineas_cubiertas": 32,
+        "lineas_totales": 32,
+        "ramas_cubiertas": 16,
+        "ramas_totales": 16
+    },
+    "archivos": {
+        "Public_Proyects/blackjack/judger.py": {
+            "line_coverage": "100.0%",
+            "branch_coverage": "100.0%",
+            "lineas_cubiertas": 32,
+            "lineas_totales": 32,
+            "lineas_faltantes": [],
+            "ramas_cubiertas": 16,
+            "ramas_totales": 16,
+            "ramas_faltantes": []
+        }
+    }
+}

@@ -61,7 +61,7 @@ def ejecutar_coverage(ruta_test, ruta_codigo_fuente):
     ruta_abs_fuente = os.path.abspath(ruta_codigo_fuente)
     cmd_run = ["coverage", "run", "--branch", "-m", "pytest", ruta_test]
     subprocess.run(cmd_run, capture_output=True, env=env_actual)
-    cmd_json = ["coverage", "json", "--include", ruta_abs_fuente, "-o", "coverage.json"]
+    cmd_json = ["coverage", "json", "--pretty-print", "--include", ruta_abs_fuente, "-o", "coverage.json"]
     subprocess.run(cmd_json, capture_output=True, env=env_actual)
     
     try:
@@ -136,10 +136,12 @@ def main(ruta_archivo, output_folder):
 
     client = genai.Client()
     start_time = time.time()
-    time_budget = 120  
+    time_budget = 240  
 
     test_valido = False
     intentos = 0
+    mutation_score = 0.0
+    hubo_alta_demanda = False
     nombre_archivo_base = os.path.basename(ruta_archivo)
     nombre_clase = os.path.splitext(nombre_archivo_base)[0]
     ruta_archivo_temporal = os.path.join(output_folder, f"test_{nombre_clase}.py")
@@ -195,7 +197,9 @@ def main(ruta_archivo, output_folder):
             mensaje_error = str(e)
             print(f"Error de API: {mensaje_error}")
         
-            if "503" in mensaje_error or "429" in mensaje_error or "UNAVAILABLE" in mensaje_error:
+            if any(codigo in mensaje_error for codigo in ("503", "UNAVAILABLE", "504", "DEADLINE_EXCEEDED")):
+                hubo_alta_demanda = True
+            if hubo_alta_demanda or "429" in mensaje_error:
                 print("El servidor de Gemini está saturado...")
                 time.sleep(5)
                 intentos -= 1  
@@ -280,6 +284,13 @@ def main(ruta_archivo, output_folder):
                 """
 
     print(f"\nGeneración finalizada en {time.time() - start_time:.1f} segundos.")
+    ruta_metricas = os.path.join(output_folder, "metrics.json")
+
+    if not test_valido and hubo_alta_demanda:
+        print("No se logró por error 503/504 de Gemini: High demand")
+        with open(ruta_metricas, "w") as f:
+            json.dump({"error": "High demand"}, f, indent=4)
+        return
     
     line_cov_final, branch_cov_final = ejecutar_coverage(ruta_archivo_temporal, ruta_archivo)
     metricas = {

@@ -8,66 +8,101 @@ class TestMahjongDealer:
     def mock_np_random(self):
         return MagicMock()
 
-    @pytest.fixture
-    def dealer(self, mock_np_random):
-        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
-            # Creamos una lista de mocks numerados para identificar las cartas
-            mock_cards = [MagicMock(name=f"card_{i}") for i in range(10)]
-            mock_init.return_value = list(mock_cards)
-            return MahjongDealer(mock_np_random)
-
-    def test_init(self, mock_np_random):
-        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
-            mock_deck = [MagicMock()]
-            mock_init.return_value = mock_deck
-            
+    def test_init_and_internal_methods(self, mock_np_random):
+        """
+        Tests the constructor and explicitly exercises the internal calls.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1', 'c2']) as mock_init:
             dealer = MahjongDealer(mock_np_random)
             
             assert dealer.np_random == mock_np_random
-            assert dealer.deck == mock_deck
             assert dealer.table == []
-            mock_np_random.shuffle.assert_called_once_with(mock_deck)
+            assert dealer.deck == ['c1', 'c2']
+            mock_init.assert_called_once()
+            # Branch: Verify shuffle is called during __init__
+            mock_np_random.shuffle.assert_called_with(['c1', 'c2'])
 
-    def test_shuffle(self, dealer, mock_np_random):
-        dealer.shuffle()
-        mock_np_random.shuffle.assert_called_with(dealer.deck)
+    def test_shuffle_method_branch(self, mock_np_random):
+        """
+        Covers the shuffle method branch explicitly.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['a']):
+            dealer = MahjongDealer(mock_np_random)
+            dealer.shuffle()
+            # Branch: Verify shuffle logic is executed
+            assert mock_np_random.shuffle.call_count == 2
 
-    def test_deal_cards(self, dealer):
-        # Configuración del jugador mock con lista real para 'hand'
-        mock_player = MagicMock()
-        mock_player.hand = []
-        
-        # Guardamos referencias a las cartas antes de repartir
-        # Como el método usa pop(), las cartas repartidas son las que estaban al final
-        initial_deck = list(dealer.deck)
-        num_cards_to_deal = 3
-        expected_cards = initial_deck[-num_cards_to_deal:]
-        
-        dealer.deal_cards(mock_player, num_cards_to_deal)
-        
-        # Verificamos longitud
-        assert len(mock_player.hand) == num_cards_to_deal
-        assert len(dealer.deck) == len(initial_deck) - num_cards_to_deal
-        
-        # Verificamos que las cartas en la mano sean las que se retiraron del final del deck
-        # El orden en hand será [última, penúltima, antepenúltima] debido al pop()
-        assert mock_player.hand == expected_cards[::-1]
-        
-    def test_deal_cards_empty_deck_behavior(self, dealer):
-        # Vaciamos el deck
-        dealer.deck = []
-        mock_player = MagicMock()
-        mock_player.hand = []
-        
-        # Intentar repartir de un deck vacío debe lanzar IndexError por el pop()
-        with pytest.raises(IndexError):
+    def test_deal_cards_loop_branches(self, mock_np_random):
+        """
+        Covers implicit branches in the for-loop structure:
+        - Branch: loop does not execute (range(0))
+        - Branch: loop executes one or more times
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1', 'c2']):
+            dealer = MahjongDealer(mock_np_random)
+            mock_player = MagicMock()
+            mock_player.hand = []
+
+            # Branch: num = 0 (Loop body never entered)
+            dealer.deal_cards(mock_player, 0)
+            assert len(mock_player.hand) == 0
+
+            # Branch: num > 0 (Loop body entered)
             dealer.deal_cards(mock_player, 1)
+            assert len(mock_player.hand) == 1
+            assert len(dealer.deck) == 1
 
-    def test_integration_with_multiple_cards(self, dealer):
-        mock_player = MagicMock()
-        mock_player.hand = []
-        
-        # Repartir 5 cartas
-        dealer.deal_cards(mock_player, 5)
-        
-        assert len(mock_player.hand) == 5
+    def test_deal_cards_exception_and_partial_execution(self, mock_np_random):
+        """
+        Covers the exception branch when the deck is depleted mid-loop.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1']):
+            dealer = MahjongDealer(mock_np_random)
+            mock_player = MagicMock()
+            mock_player.hand = []
+            
+            # Requesting more cards than available triggers IndexError inside the loop
+            with pytest.raises(IndexError):
+                dealer.deal_cards(mock_player, 2)
+            
+            # Verify the partial state resulting from the failed operation
+            assert len(mock_player.hand) == 1
+            assert len(dealer.deck) == 0
+
+    def test_deal_cards_boundary_exact_exhaustion(self, mock_np_random):
+        """
+        Covers the boundary branch where the deck becomes exactly empty.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['a', 'b']):
+            dealer = MahjongDealer(mock_np_random)
+            mock_player = MagicMock()
+            mock_player.hand = []
+            
+            # Exhaust the deck
+            dealer.deal_cards(mock_player, 2)
+            assert len(dealer.deck) == 0
+            assert len(mock_player.hand) == 2
+
+    def test_init_with_empty_deck_branch(self, mock_np_random):
+        """
+        Covers branch for empty initial deck during instantiation.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=[]):
+            dealer = MahjongDealer(mock_np_random)
+            assert dealer.deck == []
+            # Verify shuffle branch is still taken even with empty list
+            assert mock_np_random.shuffle.called
+
+    def test_deal_cards_preservation(self, mock_np_random):
+        """
+        Ensures existing player hand state is maintained when appending.
+        """
+        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1']):
+            dealer = MahjongDealer(mock_np_random)
+            mock_player = MagicMock()
+            mock_player.hand = ['existing']
+            
+            dealer.deal_cards(mock_player, 1)
+            assert 'existing' in mock_player.hand
+            assert 'c1' in mock_player.hand
+            assert len(mock_player.hand) == 2

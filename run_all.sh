@@ -30,6 +30,8 @@ for project in "${!projects[@]}"; do
         filepath="$BASE_DIR/$project/$file"
         output_folder="$OUTPUT_BASE/$project/$class_name"
         
+        [ -f "$filepath" ] || { echo "-> Saltando $filepath (no existe)"; continue; }
+
         echo "-> Ejecutando agente para: $filepath"
         
         # Crear la carpeta de salida por si el agente no lo hace automáticamente

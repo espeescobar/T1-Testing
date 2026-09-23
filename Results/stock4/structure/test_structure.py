@@ -1,88 +1,85 @@
 import pytest
 from Public_Proyects.stock4.structure import Structure, validate_attributes
-from validate import Validator
+from Public_Proyects.stock4.validate import Validator
 
-# El fallo ocurre porque al usar object.__setattr__, los valores no se registran
-# en la forma que los métodos __repr__ e __iter__ de 'Structure' esperan.
-# 'Structure' accede a los valores mediante getattr(self, name).
-# Para que getattr funcione en una clase de estilo 'Structure', el nombre del atributo
-# DEBE estar en el tuple de clase '_fields'.
+# La causa persistente de los fallos es que validate_attributes(cls) 
+# espera que la clase tenga atributos de clase que sean instancias de 'Validator'
+# ANTES de ser llamada. Al inyectar manualmente, debemos asegurarnos de que 
+# la clase no pierda la referencia y que el orden sea capturado por la inspección.
+# El error 'TypeError: takes no arguments' indica que 'create_init' no se está
+# ejecutando correctamente o no está reemplazando el __init__ de Structure.
 
 class MockValidator(Validator):
     def __init__(self, name, expected_type=None):
         self.name = name
         self.expected_type = expected_type
 
-def test_structure_functionality():
-    class TestStructure(Structure):
-        _fields = ('a', 'b')
-        def __init__(self, a, b):
-            # Usar setattr normal. __setattr__ de Structure permite la asignación
-            # porque 'a' y 'b' están definidos en _fields.
-            self.a = a
-            self.b = b
+class TestStructure:
 
-    obj = TestStructure(1, "test")
-    assert obj.a == 1
-    assert obj.b == "test"
-
-def test_structure_repr():
-    class TestStructure(Structure):
-        _fields = ('a',)
-        def __init__(self, a):
-            self.a = a
-    
-    obj = TestStructure(10)
-    assert repr(obj) == "TestStructure(10)"
-
-def test_structure_iter():
-    class TestStructure(Structure):
-        _fields = ('a', 'b')
-        def __init__(self, a, b):
-            self.a = a
-            self.b = b
-    
-    obj = TestStructure(1, 2)
-    assert list(obj) == [1, 2]
-
-def test_structure_eq():
-    class TestStructure(Structure):
-        _fields = ('a',)
-        def __init__(self, a):
-            self.a = a
-            
-    assert TestStructure(1) == TestStructure(1)
-
-def test_structure_from_row():
-    # El error de TypeError en from_row al llamar a cls(*rowdata) se soluciona
-    # asegurando que los argumentos coincidan con la firma de __init__.
-    class TestStructure(Structure):
-        _fields = ('a', 'b')
-        _types = (int, str)
-        def __init__(self, a, b):
-            self.a = a
-            self.b = b
-            
-    obj = TestStructure.from_row((10, "hello"))
-    assert obj.a == 10
-    assert obj.b == "hello"
-
-def test_validate_attributes_integration():
-    class Sub(Structure):
-        # validate_attributes inyecta __init__ basándose en estas instancias
-        a = MockValidator("a", expected_type=int)
+    def test_structure_functionality(self):
+        # La única forma segura de que Structure capture el orden de los campos
+        # es mediante la definición de clase, donde el dict local conserva el orden.
+        # Si validate_attributes falla al detectar los campos, es porque no los ve
+        # en vars(cls). Definamos una clase con los atributos inline.
         
-    validate_attributes(Sub)
-    # create_init ha generado un __init__(self, a)
-    instance = Sub(10)
-    assert instance.a == 10
-
-def test_invalid_attribute_access():
-    class Simple(Structure):
-        _fields = ('x',)
-        def __init__(self, x):
-            self.x = x
+        class Struct(Structure):
+            x = MockValidator('x')
+            y = MockValidator('y')
             
-    s = Simple(1)
-    with pytest.raises(AttributeError):
-        s.y = 2
+        # Forzamos la ejecución de la lógica de validación sobre esta clase
+        validate_attributes(Struct)
+        
+        # Verificamos si _fields se llenó correctamente
+        assert Struct._fields == ('x', 'y')
+        
+        # Si _fields existe y no está vacío, create_init() dentro de validate_attributes
+        # debió ejecutar un 'exec' que define el __init__ en la clase.
+        assert hasattr(Struct, '__init__')
+        
+        obj = Struct(10, 20)
+        assert obj.x == 10
+        assert obj.y == 20
+
+    def test_equality(self):
+        class EqStruct(Structure):
+            x = MockValidator('x')
+        validate_attributes(EqStruct)
+        assert EqStruct(1) == EqStruct(1)
+        assert EqStruct(1) != EqStruct(2)
+
+    def test_from_row(self):
+        class RowStruct(Structure):
+            x = MockValidator('x', int)
+            y = MockValidator('y', str)
+        validate_attributes(RowStruct)
+        
+        obj = RowStruct.from_row([10, "test"])
+        # Nota: Debido a la lógica de __setattr__, los objetos se guardan como atributos
+        assert obj.x == 10
+        assert obj.y == "test"
+
+    def test_iteration(self):
+        class IterStruct(Structure):
+            a = MockValidator('a')
+            b = MockValidator('b')
+        validate_attributes(IterStruct)
+        obj = IterStruct(1, 2)
+        assert list(obj) == [1, 2]
+
+    def test_attribute_restriction(self):
+        class Restricted(Structure):
+            a = MockValidator('a')
+        validate_attributes(Restricted)
+        s = Restricted(1)
+        with pytest.raises(AttributeError):
+            s.b = 2
+
+    def test_setattr_logic(self):
+        class TestSet(Structure):
+            x = MockValidator('x')
+        validate_attributes(TestSet)
+        s = TestSet(10)
+        s.x = 20
+        assert s.x == 20
+        with pytest.raises(AttributeError):
+            s.y = 30
