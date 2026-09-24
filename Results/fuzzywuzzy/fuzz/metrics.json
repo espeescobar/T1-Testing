@@ -1,5 +1,3 @@
 {
-    "line_coverage": 0.83,
-    "branch_coverage": 0.69,
-    "mutation_score": 1.0
+    "error": "High demand"
 }

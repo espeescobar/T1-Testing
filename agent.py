@@ -177,7 +177,7 @@ def main(ruta_archivo, output_folder):
     chat = client.chats.create(model="gemini-3.1-flash-lite") 
     
     tiempo_restante = time_budget - (time.time() - start_time)
-    while not test_valido and  10 < tiempo_restante:
+    while not test_valido and  10 < tiempo_restante: 
         tiempo_restante = time_budget - (time.time() - start_time)
         if tiempo_restante < 10:
             break

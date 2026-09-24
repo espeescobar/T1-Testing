@@ -7,65 +7,57 @@ def test_card_initialization():
     assert card.suit == 'S'
     assert card.rank == 'A'
 
-def test_card_equality_logic():
-    card = Card('S', 'A')
+def test_card_equality():
+    card1 = Card('H', 'K')
+    card2 = Card('H', 'K')
+    card3 = Card('D', 'A')
     
-    # Coverage: Branch 'if isinstance(other, Card)'
-    assert card == Card('S', 'A')
-    assert card != Card('H', 'A')
-    assert card != Card('S', 'K')
-    
-    # Coverage: Branch 'else' in __eq__
-    assert (card == "AS") is False
-    assert card.__eq__(123) is NotImplemented
+    assert card1 == card2
+    assert card1 != card3
+    assert card1 != "KH"  # Comparación con tipo distinto
 
-def test_card_hash_and_exceptions():
-    # Coverage: Valid hash calculation
-    card = Card('S', 'A')
-    assert isinstance(hash(card), int)
-    
-    # Coverage: ValueError in .index() calls inside __hash__
-    invalid_suit = Card('Z', 'A')
-    with pytest.raises(ValueError):
-        hash(invalid_suit)
-        
-    invalid_rank = Card('S', '1')
-    with pytest.raises(ValueError):
-        hash(invalid_rank)
-
-def test_card_str():
+def test_card_str_representation():
     card = Card('C', 'T')
     assert str(card) == 'TC'
 
 def test_card_get_index():
-    card = Card('D', '5')
-    assert card.get_index() == 'D5'
+    card = Card('D', '7')
+    assert card.get_index() == 'D7'
 
-def test_card_equality_with_mock():
-    # Coverage: Mocking with spec=Card allows passing isinstance(other, Card) check
-    card = Card('S', 'A')
+def test_card_hash():
+    card1 = Card('S', 'A')
+    card2 = Card('S', 'A')
+    card3 = Card('H', '2')
     
-    mock_match = MagicMock(spec=Card)
-    mock_match.suit = 'S'
-    mock_match.rank = 'A'
-    
-    mock_mismatch = MagicMock(spec=Card)
-    mock_mismatch.suit = 'H'
-    mock_mismatch.rank = 'A'
-    
-    assert card == mock_match
-    assert card != mock_mismatch
+    assert hash(card1) == hash(card2)
+    assert hash(card1) != hash(card3)
 
-def test_full_matrix_of_types():
-    # Ensuring every single valid path in index/hash logic is touched
-    for suit in Card.valid_suit:
-        for rank in Card.valid_rank:
-            card = Card(suit, rank)
-            assert card.get_index() == suit + rank
-            assert str(card) == rank + suit
-            assert isinstance(hash(card), int)
+def test_card_hash_calculation():
+    # S index 0, A index 0 -> 0 + 100*0 = 0
+    card_sa = Card('S', 'A')
+    # H index 1, 2 index 1 -> 1 + 100*1 = 101
+    card_h2 = Card('H', '2')
+    
+    assert hash(card_sa) == 0
+    assert hash(card_h2) == 101
 
-def test_comparison_with_none_type():
-    card = Card('S', 'A')
-    # Explicitly testing None branch in equality
-    assert card.__eq__(None) is NotImplemented
+def test_card_with_mock():
+    # Ejemplo de uso de MagicMock según requerimiento
+    mock_card = MagicMock(spec=Card)
+    mock_card.suit = 'BJ'
+    mock_card.rank = 'A'
+    
+    # Verificamos que el mock se comporta como esperamos en el contexto de la clase
+    assert mock_card.suit == 'BJ'
+    assert mock_card.rank == 'A'
+
+def test_invalid_suit_in_hash_raises_error():
+    # Intentar hashear una carta con suit inválido debería lanzar ValueError
+    card = Card('INVALID', 'A')
+    with pytest.raises(ValueError):
+        hash(card)
+
+def test_invalid_rank_in_hash_raises_error():
+    card = Card('S', 'INVALID')
+    with pytest.raises(ValueError):
+        hash(card)

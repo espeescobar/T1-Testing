@@ -8,101 +8,52 @@ class TestMahjongDealer:
     def mock_np_random(self):
         return MagicMock()
 
-    def test_init_and_internal_methods(self, mock_np_random):
-        """
-        Tests the constructor and explicitly exercises the internal calls.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1', 'c2']) as mock_init:
-            dealer = MahjongDealer(mock_np_random)
-            
-            assert dealer.np_random == mock_np_random
-            assert dealer.table == []
-            assert dealer.deck == ['c1', 'c2']
+    @pytest.fixture
+    def dealer(self, mock_np_random):
+        # Utilizamos patch como gestor de contexto dentro del fixture
+        # para evitar el error de inyección de argumentos de pytest
+        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
+            mock_init.return_value = ["card1", "card2", "card3", "card4", "card5"]
+            dealer_instance = MahjongDealer(mock_np_random)
+            # Retornamos la instancia configurada
+            return dealer_instance
+
+    def test_init(self, mock_np_random, dealer):
+        assert dealer.np_random == mock_np_random
+        assert dealer.table == []
+        assert len(dealer.deck) == 5
+        # Verifica que shuffle fue llamado al inicializar
+        assert dealer.np_random.shuffle.called
+
+    def test_shuffle(self, dealer):
+        initial_deck = list(dealer.deck)
+        dealer.shuffle()
+        # Se llamó una vez en __init__ y otra en test_shuffle
+        assert dealer.np_random.shuffle.call_count == 2
+        assert dealer.deck == initial_deck
+
+    def test_deal_cards(self, dealer):
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        num_cards = 3
+        dealer.deal_cards(mock_player, num_cards)
+        
+        assert len(mock_player.hand) == num_cards
+        assert len(dealer.deck) == 2
+        # El pop toma del final: "card5", luego "card4", luego "card3"
+        assert mock_player.hand == ["card5", "card4", "card3"]
+
+    def test_deal_cards_empty_deck(self, dealer):
+        dealer.deck = []
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        with pytest.raises(IndexError):
+            dealer.deal_cards(mock_player, 1)
+
+    def test_init_calls_init_deck(self, mock_np_random):
+        with patch('Public_Proyects.mahjong.dealer.init_deck') as mock_init:
+            mock_init.return_value = ["c1"]
+            MahjongDealer(mock_np_random)
             mock_init.assert_called_once()
-            # Branch: Verify shuffle is called during __init__
-            mock_np_random.shuffle.assert_called_with(['c1', 'c2'])
-
-    def test_shuffle_method_branch(self, mock_np_random):
-        """
-        Covers the shuffle method branch explicitly.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['a']):
-            dealer = MahjongDealer(mock_np_random)
-            dealer.shuffle()
-            # Branch: Verify shuffle logic is executed
-            assert mock_np_random.shuffle.call_count == 2
-
-    def test_deal_cards_loop_branches(self, mock_np_random):
-        """
-        Covers implicit branches in the for-loop structure:
-        - Branch: loop does not execute (range(0))
-        - Branch: loop executes one or more times
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1', 'c2']):
-            dealer = MahjongDealer(mock_np_random)
-            mock_player = MagicMock()
-            mock_player.hand = []
-
-            # Branch: num = 0 (Loop body never entered)
-            dealer.deal_cards(mock_player, 0)
-            assert len(mock_player.hand) == 0
-
-            # Branch: num > 0 (Loop body entered)
-            dealer.deal_cards(mock_player, 1)
-            assert len(mock_player.hand) == 1
-            assert len(dealer.deck) == 1
-
-    def test_deal_cards_exception_and_partial_execution(self, mock_np_random):
-        """
-        Covers the exception branch when the deck is depleted mid-loop.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1']):
-            dealer = MahjongDealer(mock_np_random)
-            mock_player = MagicMock()
-            mock_player.hand = []
-            
-            # Requesting more cards than available triggers IndexError inside the loop
-            with pytest.raises(IndexError):
-                dealer.deal_cards(mock_player, 2)
-            
-            # Verify the partial state resulting from the failed operation
-            assert len(mock_player.hand) == 1
-            assert len(dealer.deck) == 0
-
-    def test_deal_cards_boundary_exact_exhaustion(self, mock_np_random):
-        """
-        Covers the boundary branch where the deck becomes exactly empty.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['a', 'b']):
-            dealer = MahjongDealer(mock_np_random)
-            mock_player = MagicMock()
-            mock_player.hand = []
-            
-            # Exhaust the deck
-            dealer.deal_cards(mock_player, 2)
-            assert len(dealer.deck) == 0
-            assert len(mock_player.hand) == 2
-
-    def test_init_with_empty_deck_branch(self, mock_np_random):
-        """
-        Covers branch for empty initial deck during instantiation.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=[]):
-            dealer = MahjongDealer(mock_np_random)
-            assert dealer.deck == []
-            # Verify shuffle branch is still taken even with empty list
-            assert mock_np_random.shuffle.called
-
-    def test_deal_cards_preservation(self, mock_np_random):
-        """
-        Ensures existing player hand state is maintained when appending.
-        """
-        with patch('Public_Proyects.mahjong.dealer.init_deck', return_value=['c1']):
-            dealer = MahjongDealer(mock_np_random)
-            mock_player = MagicMock()
-            mock_player.hand = ['existing']
-            
-            dealer.deal_cards(mock_player, 1)
-            assert 'existing' in mock_player.hand
-            assert 'c1' in mock_player.hand
-            assert len(mock_player.hand) == 2

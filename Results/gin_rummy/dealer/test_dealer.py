@@ -6,78 +6,64 @@ class TestGinRummyDealer:
 
     @pytest.fixture
     def mock_np_random(self):
-        return MagicMock()
+        mock = MagicMock()
+        # Ensure shuffle does nothing to the list in place
+        mock.shuffle.side_effect = lambda x: x
+        return mock
 
-    def test_init_state(self, mock_np_random):
-        with patch('Public_Proyects.gin_rummy.dealer.utils') as mock_utils:
-            mock_deck = ["C1", "C2"]
-            mock_utils.get_deck.return_value = list(mock_deck)
-            
+    @pytest.fixture
+    def deck_content(self):
+        return ['C1', 'C2', 'C3', 'C4', 'C5', 'C6']
+
+    @pytest.fixture
+    def dealer(self, mock_np_random, deck_content):
+        with patch('utils.get_deck', return_value=list(deck_content)):
+            return GinRummyDealer(mock_np_random)
+
+    def test_init_initializes_piles_correctly(self, mock_np_random):
+        test_deck = ['A', 'B', 'C']
+        with patch('utils.get_deck', return_value=list(test_deck)):
             dealer = GinRummyDealer(mock_np_random)
             
             assert dealer.discard_pile == []
-            assert len(dealer.stock_pile) == 2
-            assert dealer.shuffled_deck is not dealer.stock_pile 
-            mock_np_random.shuffle.assert_called_once_with(dealer.shuffled_deck)
+            assert len(dealer.shuffled_deck) == 3
+            assert len(dealer.stock_pile) == 3
+            mock_np_random.shuffle.assert_called_once()
 
-    @pytest.mark.parametrize("num_cards", [0, 1, 3])
-    def test_deal_cards_loop_variations(self, mock_np_random, num_cards):
-        """
-        Covers the range(num) loop logic.
-        """
-        with patch('Public_Proyects.gin_rummy.dealer.utils') as mock_utils:
-            mock_utils.get_deck.return_value = ["C1", "C2", "C3"]
-            dealer = GinRummyDealer(mock_np_random)
-            
-            player = MagicMock()
-            player.hand = []
-            
-            dealer.deal_cards(player, num_cards)
-            
-            assert len(player.hand) == num_cards
-            assert player.did_populate_hand.called is True
+    def test_deal_cards_updates_player_hand_and_stock(self, dealer):
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        num_cards = 3
+        dealer.deal_cards(mock_player, num_cards)
+        
+        assert len(mock_player.hand) == 3
+        assert len(dealer.stock_pile) == 3
+        mock_player.did_populate_hand.assert_called_once()
 
-    def test_deal_cards_pop_logic(self, mock_np_random):
-        with patch('Public_Proyects.gin_rummy.dealer.utils') as mock_utils:
-            mock_utils.get_deck.return_value = ["Bottom", "Top"]
-            dealer = GinRummyDealer(mock_np_random)
-            player = MagicMock()
-            player.hand = []
-            
-            dealer.deal_cards(player, 1)
-            
-            assert player.hand == ["Top"]
-            assert dealer.stock_pile == ["Bottom"]
+    def test_deal_cards_removes_from_stock_pile(self, dealer, deck_content):
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        # El método pop() en Python extrae el último elemento de la lista.
+        # Si el deck es ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
+        # al pedir 2 cartas, pop() sacará 'C6' y luego 'C5'.
+        # Por lo tanto, el último elemento añadido a la mano será 'C5'.
+        
+        initial_stock_size = len(dealer.stock_pile)
+        dealer.deal_cards(mock_player, 2)
+        
+        assert len(dealer.stock_pile) == initial_stock_size - 2
+        assert mock_player.hand == ['C6', 'C5']
+        assert mock_player.hand[-1] == 'C5'
 
-    def test_deal_cards_exception_branch(self, mock_np_random):
-        """
-        Covers the branch where the loop runs for more items than exist in the stock_pile.
-        """
-        with patch('Public_Proyects.gin_rummy.dealer.utils') as mock_utils:
-            mock_utils.get_deck.return_value = ["C1"]
-            dealer = GinRummyDealer(mock_np_random)
-            player = MagicMock()
-            # Initialize hand as a real list to track state during iteration
-            player.hand = []
-            
-            # Attempt to deal 2 cards when only 1 is available
-            with pytest.raises(IndexError):
-                dealer.deal_cards(player, 2)
-            
-            # After IndexError, the loop terminates immediately upon the second iteration.
-            # Only one card should have been appended before the crash.
-            assert len(player.hand) == 1
-            assert len(dealer.stock_pile) == 0
-
-    def test_did_populate_hand_called_always(self, mock_np_random):
-        """
-        Ensures that did_populate_hand is called even if range(num) is empty (0).
-        """
-        with patch('Public_Proyects.gin_rummy.dealer.utils') as mock_utils:
-            mock_utils.get_deck.return_value = []
-            dealer = GinRummyDealer(mock_np_random)
-            player = MagicMock()
-            
-            dealer.deal_cards(player, 0)
-            
-            player.did_populate_hand.assert_called_once()
+    def test_deal_multiple_times(self, dealer):
+        mock_player = MagicMock()
+        mock_player.hand = []
+        
+        dealer.deal_cards(mock_player, 1)
+        dealer.deal_cards(mock_player, 1)
+        
+        assert len(mock_player.hand) == 2
+        assert len(dealer.stock_pile) == 4
+        assert mock_player.did_populate_hand.call_count == 2

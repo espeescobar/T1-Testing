@@ -7,77 +7,78 @@ def player():
     np_random = MagicMock()
     return MahjongPlayer(player_id=1, np_random=np_random)
 
-@pytest.fixture
-def mock_card():
-    card = MagicMock()
-    card.get_str.return_value = "TestCard"
-    return card
-
 def test_init(player):
     assert player.get_player_id() == 1
     assert player.hand == []
     assert player.pile == []
 
-def test_play_card(player, mock_card):
+def test_play_card(player):
+    card = MagicMock()
+    card.get_str.return_value = "Card1"
+    player.hand = [card]
     dealer = MagicMock()
     dealer.table = []
-    player.hand = [mock_card]
-    
-    player.play_card(dealer, mock_card)
-    
+
+    player.play_card(dealer, card)
+
     assert len(player.hand) == 0
-    assert mock_card in dealer.table
+    assert card in dealer.table
 
 def test_chow(player):
-    dealer = MagicMock()
+    card_a = MagicMock()
+    card_b = MagicMock()
     last_card = MagicMock()
-    card1 = MagicMock()
-    card2 = MagicMock()
     
+    player.hand = [card_a, card_b]
+    dealer = MagicMock()
     dealer.table = [last_card]
-    player.hand = [card1, card2]
-    chow_cards = [card1, card2, last_card]
     
-    player.chow(dealer, [card1, card2])
+    cards_to_chow = [card_a, card_b, last_card]
     
-    assert len(player.hand) == 0
-    assert [card1, card2] in player.pile
+    player.chow(dealer, cards_to_chow)
+    
     assert len(dealer.table) == 0
+    assert len(player.hand) == 0
+    assert cards_to_chow in player.pile
 
 def test_gong(player):
-    dealer = MagicMock()
     card1 = MagicMock()
     card2 = MagicMock()
-    
     player.hand = [card1, card2]
-    gong_cards = [card1, card2]
+    dealer = MagicMock()
+    cards = [card1, card2]
     
-    player.gong(dealer, gong_cards)
+    player.gong(dealer, cards)
     
     assert len(player.hand) == 0
-    assert gong_cards in player.pile
+    assert cards in player.pile
 
 def test_pong(player):
-    dealer = MagicMock()
     card1 = MagicMock()
     card2 = MagicMock()
-    
     player.hand = [card1, card2]
-    pong_cards = [card1, card2]
+    dealer = MagicMock()
+    cards = [card1, card2]
     
-    player.pong(dealer, pong_cards)
+    player.pong(dealer, cards)
     
     assert len(player.hand) == 0
-    assert pong_cards in player.pile
+    assert cards in player.pile
 
-def test_print_hand(player, capsys, mock_card):
-    player.hand = [mock_card]
+def test_print_hand(capsys, player):
+    card = MagicMock()
+    card.get_str.return_value = "TestCard"
+    player.hand = [card]
+    
     player.print_hand()
     captured = capsys.readouterr()
-    assert "['TestCard']" in captured.out
+    assert captured.out.strip() == "['TestCard']"
 
-def test_print_pile(player, mock_card):
-    player.pile = [[mock_card]]
+def test_print_pile(capsys, player):
+    card = MagicMock()
+    card.get_str.return_value = "PileCard"
+    player.pile = [[card]]
+    
     player.print_pile()
-    # Simple check for print execution
-    assert True 
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "[['PileCard']]"

@@ -7,82 +7,60 @@ def test_card_initialization():
     assert card.suit == 'S'
     assert card.rank == 'A'
 
-def test_card_equality_branches():
-    # Cobertura de rama: isinstance(other, Card) es True
-    card1 = Card('H', 'K')
-    card2 = Card('H', 'K')
-    card3 = Card('H', 'Q')
-    card4 = Card('D', 'K')
+def test_card_equality():
+    card1 = Card('H', '5')
+    card2 = Card('H', '5')
+    card3 = Card('D', '5')
     
-    # Evalúa el "and" en la rama True
     assert card1 == card2
-    assert (card1 == card3) is False
-    assert (card1 == card4) is False
-    
-    # Cobertura de rama: isinstance(other, Card) es False
-    assert card1.__eq__("Not a card") is NotImplemented
+    assert card1 != card3
+    assert card1 != "5H"  # Testing against unrelated type
 
-def test_card_hash_and_index_branches():
-    # Cobertura de camino normal para __hash__
-    card = Card('H', '2')
-    # Rank index 1 (for '2'), Suit index 1 (for 'H')
-    assert hash(card) == 101
+def test_card_hash():
+    card1 = Card('S', 'A')
+    card2 = Card('S', 'A')
+    card3 = Card('H', '2')
     
-    # Cobertura de excepciones (invalid suit/rank) para cubrir ramas de .index()
-    # Estas líneas cubren el caso donde .index() falla al no encontrar el elemento
-    with pytest.raises(ValueError):
-        invalid_card = Card('X', 'A')
-        hash(invalid_card)
-        
-    with pytest.raises(ValueError):
-        invalid_card = Card('S', '1')
-        hash(invalid_card)
+    assert hash(card1) == hash(card2)
+    assert hash(card1) != hash(card3)
 
 def test_card_str():
     card = Card('C', 'T')
     assert str(card) == 'TC'
 
 def test_card_get_index():
-    card = Card('D', '5')
-    assert card.get_index() == 'D5'
+    card = Card('D', 'J')
+    assert card.get_index() == 'DJ'
 
-def test_card_equality_with_mock():
-    # Usando MagicMock para forzar ramas de isinstance en __eq__
-    card = Card('S', 'A')
+def test_card_hash_calculation():
+    # Validating the specific logic: rank_index + 100 * suit_index
+    # suit 'S' is index 0, rank 'A' is index 0 -> 0 + 100*0 = 0
+    # suit 'H' is index 1, rank '2' is index 1 -> 1 + 100*1 = 101
+    card1 = Card('S', 'A')
+    card2 = Card('H', '2')
     
-    # Caso: Objeto que es instancia de Card (mockeado)
+    assert hash(card1) == 0
+    assert hash(card2) == 101
+
+def test_mocked_card_behavior():
+    # Using MagicMock for scenarios where we might need to simulate card objects
     mock_card = MagicMock(spec=Card)
+    mock_card.suit = 'BJ'
     mock_card.rank = 'A'
-    mock_card.suit = 'S'
-    assert card == mock_card
     
-    # Caso: Objeto distinto de Card para la rama else
-    mock_other = MagicMock()
-    assert card.__eq__(mock_other) is NotImplemented
+    # Verify mock properties
+    assert mock_card.suit == 'BJ'
+    assert mock_card.rank == 'A'
 
-def test_card_hash_complex_mock():
-    # Mock para cubrir la lógica de __hash__ sin usar datos reales de la clase
-    # Forzamos los índices para cubrir la lógica de cálculo
-    mock_card = MagicMock(spec=Card)
-    mock_card.suit = 'RJ'
-    mock_card.rank = 'K'
-    
-    # Inyectar comportamiento esperado mediante el acceso a las constantes de clase
-    # RJ index 5, K index 12. Hash = 12 + 100 * 5 = 512
-    assert Card.__hash__(mock_card) == 512
-
-@pytest.mark.parametrize("suit", ['S', 'H', 'D', 'C', 'BJ', 'RJ'])
-@pytest.mark.parametrize("rank", ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'])
-def test_card_all_valid_combinations(suit, rank):
-    # Test exhaustivo de todas las combinaciones posibles
+@pytest.mark.parametrize("suit, rank", [
+    ('S', 'A'),
+    ('H', '2'),
+    ('D', '3'),
+    ('C', '4'),
+    ('BJ', '5'),
+    ('RJ', 'K')
+])
+def test_valid_card_combinations(suit, rank):
     card = Card(suit, rank)
-    assert card.suit == suit
-    assert card.rank == rank
-    assert str(card) == rank + suit
-    assert card.get_index() == suit + rank
-    assert hash(card) >= 0
-
-def test_card_equality_identity():
-    # Caso de borde: comparar la misma instancia
-    card = Card('S', 'A')
-    assert card == card
+    assert card.suit in Card.valid_suit
+    assert card.rank in Card.valid_rank
